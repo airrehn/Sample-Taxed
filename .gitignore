@@ -1,0 +1,14 @@
+# data files - can be large, won't share on the repo.
+data/
+*.csv
+
+# Jupyter - some checkpoints files don't need push to the repo
+.ipynb_checkpoints/
+
+#Python cache stuff
+__pycache__/
+*.pyc
+
+# OS / editor junk
+.DS_Store
+.vscode/
