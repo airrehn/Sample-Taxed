@@ -11,5 +11,6 @@ def load_brent_spot(start="2000-01-01", end=None):
 
 def load_brent_futures(start="2000-01-01", end=None):
     df = yf.download("BZ=F", start=start, end= end, progress=False)
-    df = df[["Close"]].rename(columns={"Close": "brent_futures"})
+    df = df[["Close"]]
+    df.columns = ["brent_futures"]
     return df
