@@ -1,7 +1,7 @@
 import pandas as pd
 
-def walk_forward(price_series, horizon, start_date, end_date, forecast_funct):
-    dates = price_series.index
+def walk_forward(df, horizon, start_date, end_date, forecast_funct, **kwargs):
+    dates = df.index
     start_idx = dates.searchsorted(start_date)
     end_idx = dates.searchsorted(end_date)
 
@@ -10,8 +10,8 @@ def walk_forward(price_series, horizon, start_date, end_date, forecast_funct):
         target_idx = i + horizon
         if target_idx >= len(dates):
             break
-        forecast = forecast_funct(price_series, i, horizon)
-        actual = price_series.iloc[target_idx]
+        forecast = forecast_funct(df, i, horizon, **kwargs) #models from models.py > returns a pred price
+        actual = df["brent_spot"].iloc[target_idx]
         records.append({
             "origin_date": dates[i],
             "target_date": dates[target_idx],
