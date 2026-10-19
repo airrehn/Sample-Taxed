@@ -12,9 +12,11 @@ def walk_forward(df, horizon, start_date, end_date, forecast_funct, **kwargs):
             break
         forecast = forecast_funct(df, i, horizon, **kwargs) #models from models.py > returns a pred price
         actual = df["brent_spot"].iloc[target_idx]
+        origin_price = df["brent_spot"].iloc[i]
         records.append({
             "origin_date": dates[i],
             "target_date": dates[target_idx],
+            "origin_price": origin_price,
             "forecast": forecast,
             "actual": actual,
         })
