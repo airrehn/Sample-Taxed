@@ -2,7 +2,13 @@ import numpy as np
 from statsmodels.tsa.ar_model import AutoReg
 
 def random_walk_forecast(df, origin_idx, horizon):
-    return df["brent_spot"].iloc[origin_idx]
+    return df["brent_spot"].iloc[origin_idx] # prediction is just today's price
+
+def historical_mean_forecast(df, origin_idx, horizon, lookback=500):
+    window = df["log_return"].iloc[origin_idx - lookback + 1: origin_idx  + 1]
+    predicted_return = window.mean()
+    price_now = df["brent_spot"].iloc[origin_idx] # get actual latest price
+    return price_now * np.exp(predicted_return) # convert return to latest predicted price
 
 def ar1_forecast(df, origin_idx, horizon, lookback = 500):
     window = df["log_return"].iloc[origin_idx - lookback + 1: origin_idx  + 1]
@@ -13,4 +19,6 @@ def ar1_forecast(df, origin_idx, horizon, lookback = 500):
     predicted_return = c + phi * last_return # predict latest return (AR1 formula basically)
 
     price_now = df["brent_spot"].iloc[origin_idx] # get actual latest price
-    return price_now * np.exp(predicted_return) # convert back to latest predicted price
+    return price_now * np.exp(predicted_return) # convert return to latest predicted price
+
+
