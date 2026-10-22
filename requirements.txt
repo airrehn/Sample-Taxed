@@ -125,4 +125,5 @@ websocket-client==1.9.2
 websockets==17.2
 widgetsnbextension==4.0.16
 wrapt==2.5.1
+xlrd==2.0.2
 yfinance==1.7.0
