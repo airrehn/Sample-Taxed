@@ -1,5 +1,6 @@
 import numpy as np
 from arch import arch_model
+import pandas as pd
 
 def log_returns(df, col="brent_spot"):
     return np.log(df[col]).diff() # ln(P_t / P_t-1) i.e. log return = ln(P_t) - ln(P_t-1)
@@ -12,3 +13,11 @@ def garch_volatility(df, col="log_return"):
     model = arch_model(returns_pct, vol="GARCH", p=1, q=1, mean = "Zero", dist="normal")
     fitted = model.fit(disp="off")
     return fitted.conditional_volatility/100 # undoes the pct scaling
+
+def make_lag_features(df, cols, lags):
+    features = pd.DataFrame(index=df.index)
+    for col in cols:
+        for k in range(lags):
+            features[f"{col}_lag{k}"] = df[col].shift(k)
+    return features
+
