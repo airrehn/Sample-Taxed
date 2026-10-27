@@ -1,6 +1,8 @@
 import numpy as np
 import pandas as pd
 from sklearn.metrics import precision_recall_fscore_support
+from scipy import stats
+
 
 def accuracy_metrics(results):
     err = results["actual"] - results["forecast"]
@@ -72,6 +74,34 @@ def compare_models(results_dict, volatility=None):
         rows.append(row)
     return pd.DataFrame(rows).set_index("model")
 
+def diebold_mariano(results_a, results_b, horizon=1, loss="ape"): # Not necessary but useful when models are super close (e.g. horizon 1 model's are ~ 1% from each other), to test if the difference is just noise or statistically significant
+    a = results_a.set_index("target_date") # line both models up by the day being predicted
+    b = results_b.set_index("target_date")
+    if loss == "ape": # absolute % error, matches MAPE
+        loss_a = (a["actual"] - a["forecast"]).abs() / a["actual"]
+        loss_b = (b["actual"] - b["forecast"]).abs() / b["actual"]
+    else: # squared error, matches RMSE
+        loss_a = (a["actual"] - a["forecast"]) ** 2
+        loss_b = (b["actual"] - b["forecast"]) ** 2
+    d = (loss_a - loss_b).dropna() # daily gap, negative = A was better that day
+    n = len(d)
+
+    d_centered = d - d.mean()
+    variance = (d_centered ** 2).mean()
+    for k in range(1, horizon): # h>1 forecasts overlap, so neighbouring gaps are correlated: add that in
+        variance += 2 * (d_centered.iloc[k:].values * d_centered.iloc[:-k].values).mean()
+
+    dm_stat = d.mean() / np.sqrt(variance / n) # like a t-stat: average gap / its standard error
+    dm_stat *= np.sqrt((n + 1 - 2 * horizon + horizon * (horizon - 1) / n) / n) # small-sample correction (Harvey et al.)
+    p_value = 2 * stats.t.sf(abs(dm_stat), df=n - 1)
+    return {"DM_stat": dm_stat, "p_value": p_value, "n": n}
+
+def dm_table(results_dict, benchmark="Random Walk", horizon=1, loss="ape"):
+    rows = {}
+    for name, results in results_dict.items():
+        if name != benchmark:
+            rows[name] = diebold_mariano(results, results_dict[benchmark], horizon=horizon, loss=loss)
+    return pd.DataFrame(rows).T
 
  
 

@@ -27,14 +27,14 @@ def ar1_forecast(df, origin_idx, horizon, fit_idx, lookback = 3000):
 def var_forecast(df, origin_idx, horizon, fit_idx, cols, lags=3, lookback=3000):
     window = df[cols].iloc[fit_idx - lookback + 1: fit_idx + 1]
     fitted = VAR(window.values).fit(lags)
-    recent = df[cols].iloc[origin_idx - lags + 1: origin_idx + 1].values  # latest `lags` days of all variables (in col), used to forecast
-    predicted_return =  fitted.forecast(recent, steps=1)[0,0] #brents (log) return tomorrow in the table produced.
+    recent = df[cols].iloc[origin_idx - lags + 1: origin_idx + 1].values  # pulls latest `lags` days of all variables (in col), used to forecast.
+    predicted_return =  fitted.forecast(recent, steps=1)[0,0] #brents (log return) tomorrow in the table produced.
     price_now = df["brent_spot"].iloc[origin_idx] # get actual latest price
     return price_now * np.exp(predicted_return) # convert return to latest predicted price
 
-def xgb_forecast(df, origin_idx, horizon, fit_idx, features, lookback = 3000, n_estimators=200, max_depth=2, learning_rate=0.05):
+def xgb_forecast(df, origin_idx, horizon, fit_idx, features, lookback=3000, n_estimators=200, max_depth=2, learning_rate=0.05, min_child_weight=1):
     train = features.iloc[fit_idx - lookback: fit_idx].dropna() # ends at fit_idx - 1,  target is already known
-    model = XGBRegressor(n_estimators=n_estimators, max_depth = max_depth, learning_rate = learning_rate, random_state=0, n_jobs=1)
+    model = XGBRegressor(n_estimators=n_estimators, max_depth=max_depth, learning_rate=learning_rate, min_child_weight=min_child_weight, random_state=0, n_jobs=1)
     model.fit(train.drop(columns="target"), train["target"])
     today = features.drop(columns="target").iloc[[origin_idx]]
     predicted_return = model.predict(today)[0] # it returns a list of 1 item, just specify the [0] anyways
