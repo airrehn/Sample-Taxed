@@ -13,7 +13,7 @@ def walk_forward(df, horizon, start_date, end_date, forecast_funct,  fit_end_dat
         if target_idx >= len(dates):
             break
         if target_end_date is not None and dates[target_idx] > pd.Timestamp(target_end_date):
-            break # Last forecast shouldnt be beyond 23 Oct 2023
+            break # Last target shouldnt be beyond target_end_date = 30 Sep 2026 (for val), 23 Oct 2026 (for test)
         fit_idx = i if fit_end_idx is None else min(i, fit_end_idx)
         forecast = forecast_funct(df, i, horizon, fit_idx, **kwargs) #models from models.py > returns a pred price
         actual = df["brent_spot"].iloc[target_idx]
