@@ -41,11 +41,11 @@ def var_forecast(df, origin_idx, horizon, fit_idx, cols, lags=3, lookback=3000):
     return price_now * np.exp(predicted_return) # convert return to latest predicted price
 
 def xgb_forecast(df, origin_idx, horizon, fit_idx, features, lookback=3000, n_estimators=200, max_depth=2, learning_rate=0.05, min_child_weight=1):
-    X_all = features.drop(columns="target")
+    X_all = features
     y_all = df["log_return"].rolling(horizon).sum().shift(-horizon) # sums log return over h days before it, then shifts df back by h days, so it aligns nicely as h-th days log return. 
     train_X = X_all.iloc[fit_idx - lookback: fit_idx - horizon + 1] # last row's h-day target ends exactly at fit_idx
     train_y = y_all.iloc[fit_idx - lookback: fit_idx - horizon + 1]
-    keep = train_X.notna().all(axis=1) & train_y.notna() # same job as dropna()
+    keep = train_X.notna().all(axis=1) & train_y.notna() # same job as dropna(). makes Boolean flags for each row, we only train on the True rows.
     model = XGBRegressor(n_estimators=n_estimators, max_depth=max_depth, learning_rate=learning_rate, min_child_weight=min_child_weight, random_state=0, n_jobs=1)
     model.fit(train_X[keep], train_y[keep])
     today = X_all.iloc[[origin_idx]]
