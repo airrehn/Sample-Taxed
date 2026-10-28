@@ -26,16 +26,6 @@ def directional_metrics(results):
         "precision_down": precision[1], "recall_down": recall[1], "f1_down": f1[1],  # how accurate were "down" calls.
     }
 
-def vol_regime(results, volatility_all):
-    vol_sorted = volatility_all.reindex(results["origin_date"]).values #grabs only volatility of dates of interest from the results df.
-    median_vol = np.nanmedian(vol_sorted)
-    is_high_vol = vol_sorted >= median_vol
-
-    return { # 2 different accuracy metrics split by high and low vol periods
-        "high_vol": accuracy_metrics(results[is_high_vol]),
-        "low_vol": accuracy_metrics(results[~is_high_vol]),
-    }
-
 def economic_value_metrics(results, transaction_cost = 0.0001):
     forecasted_position= np.sign(results["forecast"] - results["origin_price"])
     gross_return = forecasted_position * (results["actual"] - results["origin_price"]) / results ["origin_price"]
@@ -56,23 +46,44 @@ def economic_value_metrics(results, transaction_cost = 0.0001):
         "num_trades": trades.sum(),
     }
 
-def summarise(results, volatility = None):
+def summarise(results):
     summary = {}
     summary.update(accuracy_metrics(results))
     summary.update(directional_metrics(results))
     summary.update(economic_value_metrics(results))
-    if volatility is not None:
-        summary["regime"] = vol_regime(results, volatility)
     return summary
 
-def compare_models(results_dict, volatility=None):
+def compare_models(results_dict):
     rows = []
     for name, results in results_dict.items():
-        row = summarise(results, volatility=volatility)
-        row = {k: v for k, v in row.items() if k != "regime"}
+        row = summarise(results)
         row["model"] = name
         rows.append(row)
     return pd.DataFrame(rows).set_index("model")
+
+
+def vol_regime(results, volatility_all):
+    vol_sorted = volatility_all.reindex(results["origin_date"]).values #grabs only volatility of dates of interest from the results df.
+    median_vol = np.nanmedian(vol_sorted)
+    is_high_vol = vol_sorted >= median_vol
+
+    return { # 2 different accuracy metrics split by high and low vol periods
+        "high_vol": accuracy_metrics(results[is_high_vol]),
+        "low_vol": accuracy_metrics(results[~is_high_vol]),
+    }
+
+
+def compare_vol_regimes(results_dict, volatility): # one row per model, columns = each metric split by vol regime
+    rows = {}
+    for name, results in results_dict.items():
+        regime = vol_regime(results, volatility) # nested dict, e.g. {"high_vol": {"MAE": 2.1, ...}, "low_vol": {"MAE": 0.9, ...}}
+        row = {}
+        for reg, metrics in regime.items(): # each regime (high_vol / low_vol)
+            for metric, value in metrics.items(): # each metric inside that regime (MAE, RMSE, MAPE)
+                row[f"{metric}_{reg}"] = value # flatten into one key, e.g. "MAE_high_vol"
+        rows[name] = row
+    return pd.DataFrame(rows).T # dict keys become columns, so transpose to put models on rows
+
 
 def diebold_mariano(results_a, results_b, horizon=1, loss="ape"): # Not necessary but useful when models are super close (e.g. horizon 1 model's are ~ 1% from each other), to test if the difference is just noise or statistically significant
     a = results_a.set_index("target_date") # line both models up by the day being predicted
