@@ -1,6 +1,8 @@
 import numpy as np
+import pandas as pd
 from statsmodels.tsa.ar_model import AutoReg
 from statsmodels.tsa.api import VAR
+import statsmodels.api as sm
 
 from xgboost import XGBRegressor
 
@@ -54,35 +56,35 @@ def xgb_forecast(df, origin_idx, horizon, fit_idx, features, lookback=3000, n_es
     return price_now * np.exp(predicted_return)
 
 
-def ar_forecast(df, origin_idx, horizon=60, fit_idx=None, lookback=500, use_drift=True):
+# def ar_forecast(df, origin_idx, horizon=60, fit_idx=None, lookback=500, use_drift=True):
     
-    fit_idx = origin_idx if fit_idx is None else fit_idx
-    start = fit_idx - lookback + 1
-    assert fit_idx <= origin_idx, "fit_idx must not be after origin_idx (lookahead)"
-    assert start >= 0, "not enough history for the lookback window"
+#     fit_idx = origin_idx if fit_idx is None else fit_idx
+#     start = fit_idx - lookback + 1
+#     assert fit_idx <= origin_idx, "fit_idx must not be after origin_idx (lookahead)"
+#     assert start >= 0, "not enough history for the lookback window"
 
-    window = df["log_return"].iloc[start: fit_idx + 1].values
-    fitted = AutoReg(window, lags=1).fit()
-    c, phi = fitted.params
-    sigma = np.sqrt(fitted.sigma2)
-    assert abs(phi) < 1, "AR(1) not stationary"
+#     window = df["log_return"].iloc[start: fit_idx + 1].values
+#     fitted = AutoReg(window, lags=1).fit()
+#     c, phi = fitted.params
+#     sigma = np.sqrt(fitted.sigma2)
+#     assert abs(phi) < 1, "AR(1) not stationary"
 
-    # Long-run mean daily return; zeroed by default because a 500-day mean
-    # is noisy and compounds into a large error over 60 days
-    mu = c / (1 - phi) if use_drift else 0.0
+#     # Long-run mean daily return; zeroed by default because a 500-day mean
+#     # is noisy and compounds into a large error over 60 days
+#     mu = c / (1 - phi) if use_drift else 0.0
 
-    r_t = df["log_return"].iloc[origin_idx]
-    p_t = df["brent_spot"].iloc[origin_idx]
+#     r_t = df["log_return"].iloc[origin_idx]
+#     p_t = df["brent_spot"].iloc[origin_idx]
 
-    # Expected cumulative log return over h days (sum of the h-step AR forecasts)
-    cum_ret = horizon * mu + (r_t - mu) * phi * (1 - phi**horizon) / (1 - phi)
+#     # Expected cumulative log return over h days (sum of the h-step AR forecasts)
+#     cum_ret = horizon * mu + (r_t - mu) * phi * (1 - phi**horizon) / (1 - phi)
 
-    # Variance of the cumulative return forecast error
-    m = np.arange(1, horizon + 1)
-    cum_var = sigma**2 / (1 - phi)**2 * np.sum((1 - phi**m)**2)
-    cum_sd = np.sqrt(cum_var)
+#     # Variance of the cumulative return forecast error
+#     m = np.arange(1, horizon + 1)
+#     cum_var = sigma**2 / (1 - phi)**2 * np.sum((1 - phi**m)**2)
+#     cum_sd = np.sqrt(cum_var)
 
-    return p_t * np.exp(cum_ret)
+#     return p_t * np.exp(cum_ret)
 
 def direct_forecast(df, origin_idx, horizon=60, fit_idx=None, lookback=3000):
     fit_idx = origin_idx if fit_idx is None else fit_idx
@@ -183,7 +185,7 @@ def spread_mr_forecast(df, origin_idx, horizon=60, fit_idx=None, lookback=1500,
     
     return p_t * np.exp(pred_ret)
 
-
+## XGBoost direct forecast: features = lagged returns, momentum, volatility
 def _make_features(r):
     s = pd.Series(r)
     F = pd.DataFrame({f"lag{k}": s.shift(k) for k in range(5)})  # last 5 daily returns
@@ -238,6 +240,8 @@ def xgb_direct_forecast(df, origin_idx, horizon=60, fit_idx=None, lookback=3000,
     
     return p_t * np.exp(pred_ret)
 
+
+## Direct ridge regression: features = lagged returns, momentum, volatility
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler, FunctionTransformer
 from sklearn.linear_model import Ridge
