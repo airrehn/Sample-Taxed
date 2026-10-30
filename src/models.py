@@ -55,37 +55,6 @@ def xgb_forecast(df, origin_idx, horizon, fit_idx, features, lookback=3000, n_es
     price_now = df["brent_spot"].iloc[origin_idx]
     return price_now * np.exp(predicted_return)
 
-
-# def ar_forecast(df, origin_idx, horizon=60, fit_idx=None, lookback=500, use_drift=True):
-    
-#     fit_idx = origin_idx if fit_idx is None else fit_idx
-#     start = fit_idx - lookback + 1
-#     assert fit_idx <= origin_idx, "fit_idx must not be after origin_idx (lookahead)"
-#     assert start >= 0, "not enough history for the lookback window"
-
-#     window = df["log_return"].iloc[start: fit_idx + 1].values
-#     fitted = AutoReg(window, lags=1).fit()
-#     c, phi = fitted.params
-#     sigma = np.sqrt(fitted.sigma2)
-#     assert abs(phi) < 1, "AR(1) not stationary"
-
-#     # Long-run mean daily return; zeroed by default because a 500-day mean
-#     # is noisy and compounds into a large error over 60 days
-#     mu = c / (1 - phi) if use_drift else 0.0
-
-#     r_t = df["log_return"].iloc[origin_idx]
-#     p_t = df["brent_spot"].iloc[origin_idx]
-
-#     # Expected cumulative log return over h days (sum of the h-step AR forecasts)
-#     cum_ret = horizon * mu + (r_t - mu) * phi * (1 - phi**horizon) / (1 - phi)
-
-#     # Variance of the cumulative return forecast error
-#     m = np.arange(1, horizon + 1)
-#     cum_var = sigma**2 / (1 - phi)**2 * np.sum((1 - phi**m)**2)
-#     cum_sd = np.sqrt(cum_var)
-
-#     return p_t * np.exp(cum_ret)
-
 def direct_forecast(df, origin_idx, horizon=60, fit_idx=None, lookback=3000):
     fit_idx = origin_idx if fit_idx is None else fit_idx
     assert fit_idx <= origin_idx, "fit_idx must not be after origin_idx"
@@ -102,7 +71,6 @@ def direct_forecast(df, origin_idx, horizon=60, fit_idx=None, lookback=3000):
 
     fit = sm.OLS(Y, sm.add_constant(X)).fit(cov_type="HAC", cov_kwds={"maxlags": horizon})
     a, b = fit.params
-    sigma = np.sqrt(fit.scale)  # residual sd of 60-day return
 
     pred_ret = a + b * R.iloc[origin_idx]
     p_t = df["brent_spot"].iloc[origin_idx]
@@ -124,7 +92,7 @@ def direct_lags_forecast(df, origin_idx, horizon=60, fit_idx=None, lookback=3000
         r_short = lp[t] - lp[t - short]                  # trailing 5-day return
         r_long = lp[t] - lp[t - long]                    # trailing 60-day return
         if nonoverlap:
-            r_long = lp[t - short] - lp[t - long]        # days t-59..t-5 only
+            r_long = lp[t - short] - lp[t - long]        # days t-59 to t-5
         return np.column_stack([r_short, r_long])
 
     # Features known at t; target = log(P_{t+h}/P_t), which must be known by fit_idx
@@ -135,7 +103,6 @@ def direct_lags_forecast(df, origin_idx, horizon=60, fit_idx=None, lookback=3000
         X = sm.add_constant(X)
 
     fit = sm.OLS(y, X).fit(cov_type="HAC", cov_kwds={"maxlags": horizon})
-    sigma = np.sqrt(fit.scale)
 
     x0 = feats(np.array([origin_idx]))
     if use_intercept:
@@ -172,15 +139,8 @@ def spread_mr_forecast(df, origin_idx, horizon=60, fit_idx=None, lookback=1500,
 
     fit = sm.OLS(y, sm.add_constant(X)).fit(cov_type="HAC", cov_kwds={"maxlags": horizon})
     a, b = fit.params
-    sigma = np.sqrt(fit.scale)
 
     pred_ret = shrink * (a + b * sp[origin_idx])
-
-    # Diagnostic: how fast does the spread itself mean-revert? (AR(1) on spread in the fit window)
-    s = sp[start: fit_idx + 1]
-    phi = np.linalg.lstsq(np.column_stack([np.ones(len(s) - 1), s[:-1]]), s[1:], rcond=None)[0][1]
-    half_life = np.log(0.5) / np.log(phi) if 0 < phi < 1 else np.nan
-
     p_t = B[origin_idx]
     
     return p_t * np.exp(pred_ret)
@@ -197,6 +157,7 @@ def _make_features(r):
 
 def xgb_direct_forecast(df, origin_idx, horizon=60, fit_idx=None, lookback=3000,
                         val_frac=0.2, seed=0):
+    
     fit_idx = origin_idx if fit_idx is None else fit_idx
     assert fit_idx <= origin_idx, "fit_idx must not be after origin_idx (lookahead)"
     start = fit_idx - lookback + 1
@@ -226,8 +187,6 @@ def xgb_direct_forecast(df, origin_idx, horizon=60, fit_idx=None, lookback=3000,
     m = XGBRegressor(n_estimators=1500, early_stopping_rounds=50, **params)
     m.fit(X_all[tr], y_all[tr], eval_set=[(X_all[va], y_all[va])], verbose=False)
     best_n = m.best_iteration + 1
-    val_rmse = np.sqrt(np.mean((y_all[va] - m.predict(X_all[va])) ** 2))
-    rw_rmse = np.sqrt(np.mean(y_all[va] ** 2))                 # zero-return benchmark
 
     # Step 2: refit on all samples with that number of trees
     final = XGBRegressor(n_estimators=best_n, **params).fit(X_all, y_all)
@@ -285,10 +244,36 @@ def direct_ridge_forecast(df, origin_idx, horizon=60, fit_idx=None, lookback=300
     gs = GridSearchCV(pipe, {"ridge__alpha": alphas}, cv=cv,
                       scoring="neg_root_mean_squared_error").fit(X, yt)
 
-    cv_rmse = -gs.best_score_
-    rw_rmse = np.mean([np.sqrt(np.mean(yt[te] ** 2)) for _, te in cv.split(X)])
-
     pred_ret = float(gs.predict(x0)[0])
     p_t = df["brent_spot"].iloc[origin_idx]
     
     return p_t * np.exp(pred_ret)
+
+## Combination model
+from functools import partial
+from scipy import stats
+
+def combination_forecast(df, origin_idx, horizon=60, fit_idx=None, members=None, weights=None):
+    """Weighted average of member forecasts.
+    Members are existing forecast functions with signature (df, origin_idx, horizon, fit_idx).
+    Averaging is done on the predicted 60-day LOG return, then converted back to a price,
+    so the combination is a geometric mean of the member price forecasts."""
+    fit_idx = origin_idx if fit_idx is None else fit_idx
+    assert fit_idx <= origin_idx, "fit_idx must not be after origin_idx (lookahead)"
+
+    if members is None:   # choose members BEFORE looking at results; keep RW in as a shrinkage anchor
+        members = [
+            random_walk_forecast,
+            partial(direct_lags_forecast, short=1, long=60, lookback=3000),
+            partial(xgb_direct_forecast, lookback=3000),
+            partial(direct_forecast, lookback=3000),
+        ]
+        
+    w = np.full(len(members), 1 / len(members)) if weights is None else np.asarray(weights, float)
+    assert len(w) == len(members) and np.isclose(w.sum(), 1), "weights must match members and sum to 1"
+
+    p_t = df["brent_spot"].iloc[origin_idx]
+    rets = np.array([np.log(fn(df, origin_idx, horizon=horizon, fit_idx=fit_idx) / p_t)
+                     for fn in members])
+    return p_t * np.exp(w @ rets)
+
