@@ -226,7 +226,7 @@ def direct_ridge_forecast(df, origin_idx, horizon=60, fit_idx=None, lookback=300
 
     lb = np.log(df["brent_spot"])
     F = make_features(df, lvl_cols, windows)
-    y = lb.shift(-horizon) - lb                            # next-60-day Brent log return
+    y = lb.shift(-horizon) - lb # next-60-day Brent log return
 
     # Features known at t; target must be known by fit_idx
     t = np.arange(start + max(windows), fit_idx - horizon + 1)
@@ -264,7 +264,7 @@ def combination_forecast(df, origin_idx, horizon=60, fit_idx=None, members=None,
     if members is None:   # choose members BEFORE looking at results; keep RW in as a shrinkage anchor
         members = [
             random_walk_forecast,
-            partial(direct_lags_forecast, short=1, long=60, lookback=3000),
+            partial(direct_lags_forecast, short=1, long=horizon, lookback=3000),
             partial(xgb_direct_forecast, lookback=3000),
             partial(direct_forecast, lookback=3000),
         ]
