@@ -175,13 +175,20 @@ def compare_models_staggered(results_dict, horizon=1):
     return pd.DataFrame(rows).set_index("model")
 
 
-def plot_forecasts(test_results, title):
+# one fixed colour per model, keyed by the first word of its name (e.g. "VAR FS lag=2" uses "VAR")
+ACTUAL_COLOUR = "#1f4e9c"
+MODEL_COLOURS = {"Random": "#d62728", "Historical": "#c23fa8", "AR(1)": "#a8730a", "VAR": "#00a087", "XGB": "#7a6ad8"}
+
+def plot_forecasts(test_results, title, models=None):
     actual = test_results["Random Walk"].set_index("target_date")["actual"]
+    if models is None:
+        models = list(test_results)   # default: plot every model
 
     plt.figure(figsize=(11, 5))
-    plt.plot(actual, linewidth=3, label="Actual Brent")
-    for name, r in test_results.items():
-        plt.plot(r["target_date"], r["forecast"], linewidth=1.5, alpha=0.8, label=name)
+    plt.plot(actual, linewidth=3, color=ACTUAL_COLOUR, label="Actual Brent")
+    for name in models:
+        r = test_results[name]
+        plt.plot(r["target_date"], r["forecast"], linewidth=1.5, alpha=0.8, color=MODEL_COLOURS[name.split()[0]], label=name)
 
     plt.title(title)
     plt.xlabel("Target Date")
