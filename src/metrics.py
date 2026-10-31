@@ -173,3 +173,20 @@ def compare_models_staggered(results_dict, horizon=1):
         row["model"] = name
         rows.append(row)
     return pd.DataFrame(rows).set_index("model")
+
+
+def plot_forecasts(test_results, title):
+    actual = test_results["Random Walk"].set_index("target_date")["actual"]
+
+    plt.figure(figsize=(11, 5))
+    plt.plot(actual, linewidth=3, label="Actual Brent")
+    for name, r in test_results.items():
+        plt.plot(r["target_date"], r["forecast"], linewidth=1.5, alpha=0.8, label=name)
+
+    plt.title(title)
+    plt.xlabel("Target Date")
+    plt.ylabel("Brent Spot Price (USD/barrel)")
+    plt.grid(alpha=0.3)
+    plt.legend()
+    plt.tight_layout()
+    plt.show()
