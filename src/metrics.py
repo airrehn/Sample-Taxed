@@ -117,6 +117,59 @@ def dm_table(results_dict, benchmark="Random Walk", horizon=1, loss="ape"):
             rows[name] = diebold_mariano(results, results_dict[benchmark], horizon=horizon, loss=loss)
     return pd.DataFrame(rows).T
 
- 
+def economic_value_staggered(results, horizon, transaction_cost=0.0001):
+    """Trade at EVERY origin date, hold `horizon` days, 1/horizon of capital per trade.
 
+    Equivalent to a portfolio of `horizon` staggered sub-strategies. Returns are measured DAILY
+    on the combined portfolio, so observations do not overlap and Sharpe = mean/std * sqrt(252).
+    """
+    # daily price path rebuilt from the backtest output (origins are consecutive trading days)
+    px = pd.concat([results.set_index("origin_date")["origin_price"],
+                    results.set_index("target_date")["actual"]])
+    px = px[~px.index.duplicated()].sort_index()
+    ret = px.pct_change()                                    # daily simple return of Brent
 
+    # signal formed at the close of the origin date; +1 long, -1 short, 0 flat
+    sig = np.sign(results["forecast"] - results["origin_price"])
+    sig.index = results["origin_date"]
+    sig = sig.reindex(px.index)                              # NaN after the last origin
+
+    # exposure on day d = average of the signals opened on days d-h ... d-1 (still held on d)
+    exposure = sig.shift(1).rolling(horizon).mean()
+
+    turnover = exposure.diff().abs()                         # net trading needed to move exposure
+    net = exposure * ret - transaction_cost * turnover
+
+    # only days where all `horizon` sub-positions are live (no ramp-up / ramp-down)
+    full = sig.notna().to_numpy() & exposure.notna().to_numpy()
+    net = net[full].iloc[1:]
+    exposure = exposure[full].iloc[1:]
+
+    ann_ret = net.mean() * 252
+    ann_vol = net.std() * np.sqrt(252)
+    equity = (1 + net).cumprod()
+    return {
+        "annualized_return": ann_ret,
+        "annualized_vol": ann_vol,
+        "sharpe_ratio": ann_ret / ann_vol if ann_vol > 0 else np.nan,
+        "max_drawdown": (equity / equity.cummax() - 1).min(),
+        "avg_gross_exposure": exposure.abs().mean(),
+        "pct_time_net_long": (exposure > 0).mean(),
+        "annual_turnover": turnover[full].iloc[1:].mean() * 252,
+        "n_days": len(net),
+    }
+
+def summarise_staggered(results, horizon=1):
+    summary = {}
+    summary.update(accuracy_metrics(results))
+    summary.update(directional_metrics(results))
+    summary.update(economic_value_metrics(results, horizon=horizon))
+    return summary
+
+def compare_models_staggered(results_dict, horizon=1):
+    rows = []
+    for name, results in results_dict.items():
+        row = summarise(results, horizon=horizon)
+        row["model"] = name
+        rows.append(row)
+    return pd.DataFrame(rows).set_index("model")
