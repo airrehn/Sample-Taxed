@@ -163,13 +163,13 @@ def summarise_staggered(results, horizon=1):
     summary = {}
     summary.update(accuracy_metrics(results))
     summary.update(directional_metrics(results))
-    summary.update(economic_value_metrics(results, horizon=horizon))
+    summary.update(economic_value_staggered(results, horizon=horizon))
     return summary
 
 def compare_models_staggered(results_dict, horizon=1):
     rows = []
     for name, results in results_dict.items():
-        row = summarise(results, horizon=horizon)
+        row = summarise_staggered(results, horizon=horizon)
         row["model"] = name
         rows.append(row)
     return pd.DataFrame(rows).set_index("model")
