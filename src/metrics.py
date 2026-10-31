@@ -177,7 +177,8 @@ def compare_models_staggered(results_dict, horizon=1):
 
 # one fixed colour per model, keyed by the first word of its name (e.g. "VAR FS lag=2" uses "VAR")
 ACTUAL_COLOUR = "#1f4e9c"
-MODEL_COLOURS = {"Random": "#d62728", "Historical": "#c23fa8", "AR(1)": "#a8730a", "VAR": "#00a087", "XGB": "#7a6ad8"}
+MODEL_COLOURS = {"Random": "#d62728", "Historical": "#c23fa8", "AR(1)": "#a8730a", "VAR": "#00a087", "XGB": "#7a6ad8",
+                 "2022": "#00a087", "2024-25": "#7a6ad8"}   # the same VAR picked on two validation periods
 
 def plot_forecasts(test_results, title, models=None):
     actual = test_results["Random Walk"].set_index("target_date")["actual"]
@@ -194,6 +195,6 @@ def plot_forecasts(test_results, title, models=None):
     plt.xlabel("Target Date")
     plt.ylabel("Brent Spot Price (USD/barrel)")
     plt.grid(alpha=0.3)
-    plt.legend()
+    plt.legend(loc="upper center", bbox_to_anchor=(0.5, -0.12), ncol=min(len(models) + 1, 4))   # below the chart, so it never hides a line
     plt.tight_layout()
     plt.show()
